@@ -98,6 +98,19 @@ h2 {
   margin-top: 6px;
 }
 
+.masthead .back-button {
+  display: block;
+  margin-bottom: 10px;
+  padding: 6px 4px;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 550;
+}
+
+.masthead .back-button:active {
+  color: var(--text);
+}
+
 /* -- role select ---------------------------------------------------------- */
 
 .role-choices {

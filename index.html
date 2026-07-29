@@ -40,6 +40,10 @@
           <span class="role-name">Fretboard</span>
           <span class="role-note">Picks the chords. Scan the code on the other phone.</span>
         </button>
+        <button type="button" id="role-standalone" class="role">
+          <span class="role-name">Standalone</span>
+          <span class="role-note">One phone. Pick chords and strum them right here.</span>
+        </button>
       </div>
 
       <p id="role-error" class="notice notice-bad" hidden></p>
@@ -49,6 +53,7 @@
     <!-- Strings: setup and settings. The same screen serves both. -->
     <section id="screen-strings-setup" class="screen screen-pad screen-scroll" hidden>
       <header class="masthead">
+        <button type="button" id="strings-setup-back" class="back-button">‹ Back</button>
         <h1>Strings</h1>
       </header>
 
@@ -74,11 +79,11 @@
         </p>
         <label class="slider">
           <span class="slider-label">First row <output id="row-first-value">60%</output></span>
-          <input type="range" id="row-first" min="0" max="150" step="5" value="60" />
+          <input type="range" id="row-first" min="0" max="300" step="5" value="60" />
         </label>
         <label class="slider">
           <span class="slider-label">Last row <output id="row-last-value">60%</output></span>
-          <input type="range" id="row-last" min="0" max="150" step="5" value="60" />
+          <input type="range" id="row-last" min="0" max="300" step="5" value="60" />
         </label>
       </section>
 
@@ -123,6 +128,7 @@
     <!-- Fretboard: pairing. -->
     <section id="screen-fretboard-scan" class="screen screen-pad screen-scroll" hidden>
       <header class="masthead">
+        <button type="button" id="fretboard-scan-back" class="back-button">‹ Back</button>
         <h1>Fretboard</h1>
       </header>
 
@@ -156,7 +162,8 @@
     <!-- Fretboard: the grid. Absolutely static once rendered. -->
     <section id="screen-fretboard-play" class="screen fretboard" hidden>
       <header class="key-strip">
-        <button type="button" id="fretboard-lock" class="lock" aria-pressed="false" aria-label="Edit lock">
+        <button type="button" id="fretboard-back" class="icon-button back-button" aria-label="Back">‹</button>
+        <button type="button" id="fretboard-lock" class="lock icon-button" aria-pressed="false" aria-label="Edit lock">
           🔒
         </button>
         <button type="button" id="fretboard-key" class="key-name" disabled>C</button>
@@ -171,6 +178,46 @@
       <div id="fretboard-banner" class="banner" hidden>
         <span>The phones disconnected.</span>
         <button type="button" id="fretboard-rescan" class="button button-small">Scan again</button>
+      </div>
+    </section>
+
+    <!-- Standalone: one phone, no pairing. Fretboard's grid plus a strum-all row. -->
+    <section id="screen-standalone-play" class="screen fretboard" hidden>
+      <header class="key-strip">
+        <button type="button" id="standalone-back" class="icon-button back-button" aria-label="Back">‹</button>
+        <button type="button" id="standalone-lock" class="lock icon-button" aria-pressed="false" aria-label="Edit lock">
+          🔒
+        </button>
+        <button type="button" id="standalone-key" class="key-name" disabled>C</button>
+        <button type="button" id="standalone-settings" class="icon-button settings-gear" aria-label="Settings">
+          ⚙
+        </button>
+      </header>
+
+      <div id="standalone-grid" class="grid"></div>
+
+      <div class="strum-row">
+        <button type="button" id="standalone-strum" class="cell strum-all">Strum all strings</button>
+      </div>
+
+      <div id="standalone-sheet" class="sheet" hidden></div>
+      <div id="standalone-toast" class="toast" role="status" hidden></div>
+
+      <div id="standalone-settings-sheet" class="sheet" hidden>
+        <div class="sheet-panel">
+          <h2>Instrument</h2>
+          <div class="radio-row">
+            <label class="radio">
+              <input type="radio" name="standalone-instrument" value="guitar" checked />
+              <span>Guitar</span>
+            </label>
+            <label class="radio">
+              <input type="radio" name="standalone-instrument" value="ukulele" />
+              <span>Ukulele</span>
+            </label>
+          </div>
+          <button type="button" id="standalone-settings-done" class="wide-button">Done</button>
+        </div>
       </div>
     </section>
   </body>

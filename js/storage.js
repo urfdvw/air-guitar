@@ -13,7 +13,7 @@ const EXPORT_FORMAT = 'air-guitar.config';
 // How much wider the first and last bands are than a middle band, in percent.
 // Compensates for the OS gesture zones at the top and bottom edges.
 export const ROW_WIDTH_MIN = 0;
-export const ROW_WIDTH_MAX = 150;
+export const ROW_WIDTH_MAX = 300;
 
 export function defaultConfig() {
   return {
