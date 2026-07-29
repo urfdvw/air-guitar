@@ -38,12 +38,23 @@ export class StringsSurface {
 
   #observeGeometry() {
     const remeasure = () => this.measure();
+    this.resizeObserver = null;
     if ('ResizeObserver' in window) {
-      new ResizeObserver(remeasure).observe(this.bandsElement);
+      this.resizeObserver = new ResizeObserver(remeasure);
+      this.resizeObserver.observe(this.bandsElement);
     }
+    this.remeasure = remeasure;
     window.addEventListener('resize', remeasure);
     window.addEventListener('orientationchange', remeasure);
     window.visualViewport?.addEventListener('resize', remeasure);
+  }
+
+  /** Releases the window-level listeners a surface instance leaves behind. */
+  destroy() {
+    this.resizeObserver?.disconnect();
+    window.removeEventListener('resize', this.remeasure);
+    window.removeEventListener('orientationchange', this.remeasure);
+    window.visualViewport?.removeEventListener('resize', this.remeasure);
   }
 
   /** Rebuilds the bands. Band 1 is at the top and maps to string 1. */
@@ -51,25 +62,15 @@ export class StringsSurface {
     this.instrument = instrument;
     this.bandsElement.replaceChildren();
 
-    // Gauge is spread across whatever range this instrument actually covers, so
-    // the ukulele's reentrant top string reads as the light one it is.
-    const lowest = Math.min(...instrument.tuning);
-    const span = Math.max(1, Math.max(...instrument.tuning) - lowest);
-
-    this.bandElements = instrument.tuning.map((openMidi, index) => {
+    this.bandElements = instrument.tuning.map((_openMidi, index) => {
       const band = document.createElement('div');
       band.className = 'band';
       band.dataset.index = String(index);
 
-      const wire = document.createElement('div');
-      wire.className = 'band-wire';
-      const weight = 1 - (openMidi - lowest) / span;
-      wire.style.setProperty('--wire', `${(2.2 + weight * 6).toFixed(2)}px`);
-
       const label = document.createElement('span');
       label.className = 'band-label';
 
-      band.append(wire, label);
+      band.append(label);
       this.bandsElement.append(band);
       return { band, label };
     });

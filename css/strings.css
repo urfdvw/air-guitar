@@ -39,31 +39,14 @@
 }
 
 .band + .band {
-  border-top: 1px solid rgb(255 255 255 / 4%);
-}
-
-.band-wire {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: var(--wire, 3px);
-  transform: translateY(-50%);
-  border-radius: 999px;
-  background: linear-gradient(
-    180deg,
-    #6d6259 0%,
-    #b9ada0 45%,
-    #5c5249 100%
-  );
-  transition: filter 160ms ease-out, box-shadow 160ms ease-out;
+  border-top: 1px solid var(--line);
 }
 
 .band-label {
   position: absolute;
   right: calc(var(--pad-right) + 16px);
-  /* Just clear of the wire, so the two never sit on top of each other. */
-  bottom: calc(50% + 7px);
+  top: 50%;
+  transform: translateY(-50%);
   color: var(--muted);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
@@ -73,12 +56,6 @@
 
 .band.lit {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
-  transition: none;
-}
-
-.band.lit .band-wire {
-  filter: brightness(1.9) saturate(0.6);
-  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 55%, transparent);
   transition: none;
 }
 

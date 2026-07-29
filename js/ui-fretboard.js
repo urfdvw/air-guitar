@@ -41,11 +41,18 @@ export class FretboardUI {
     this.editing = false;
     this.activeCell = null;
 
-    this.keyButton = root.querySelector('#fretboard-key');
-    this.lockButton = root.querySelector('#fretboard-lock');
-    this.grid = root.querySelector('#fretboard-grid');
-    this.sheet = root.querySelector('#fretboard-sheet');
-    this.toast = root.querySelector('#fretboard-toast');
+    this.keyButton = root.querySelector('.key-name');
+    this.lockButton = root.querySelector('.lock');
+    this.grid = root.querySelector('.grid');
+    this.sheet = root.querySelector('.sheet');
+    this.toast = root.querySelector('.toast');
+
+    // A root re-used from a previous session (the back button lets a role be
+    // re-entered) may still carry state classes from before.
+    root.classList.remove('editing', 'offline');
+    this.keyButton.disabled = true;
+    this.lockButton.setAttribute('aria-pressed', 'false');
+    this.lockButton.textContent = '🔒';
 
     this.#buildGrid();
     this.#wireLock();
@@ -58,6 +65,7 @@ export class FretboardUI {
   }
 
   #buildGrid() {
+    this.grid.replaceChildren();
     this.customCells = [];
     this.diatonicCells = [];
     for (let row = 0; row < SLOT_COUNT; row += 1) {
