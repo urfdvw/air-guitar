@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <title>Air guitar</title>
+    <meta name="description" content="Two phones, one strummed instrument." />
+    <meta name="theme-color" content="#141210" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Air guitar" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/icon-180.png" />
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/strings.css" />
+    <link rel="stylesheet" href="css/fretboard.css" />
+
+    <script defer src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    <!-- Module scripts run after the deferred classic ones, so the globals exist. -->
+    <script type="module" src="js/app.js"></script>
+  </head>
+  <body>
+    <!-- Role select. The choice is never persisted; every launch starts here. -->
+    <section id="screen-role" class="screen screen-pad">
+      <header class="masthead">
+        <h1>Air guitar</h1>
+        <p>Two phones, one instrument. Pick what this one does.</p>
+      </header>
+
+      <div class="role-choices">
+        <button type="button" id="role-strings" class="role">
+          <span class="role-name">Strings</span>
+          <span class="role-note">Makes the sound. Strum up and down this screen.</span>
+        </button>
+        <button type="button" id="role-fretboard" class="role">
+          <span class="role-name">Fretboard</span>
+          <span class="role-note">Picks the chords. Scan the code on the other phone.</span>
+        </button>
+      </div>
+
+      <p id="role-error" class="notice notice-bad" hidden></p>
+      <p class="footnote">Both phones need internet to pair.</p>
+    </section>
+
+    <!-- Strings: setup and settings. The same screen serves both. -->
+    <section id="screen-strings-setup" class="screen screen-pad screen-scroll" hidden>
+      <header class="masthead">
+        <h1>Strings</h1>
+      </header>
+
+      <section class="panel">
+        <h2>Instrument</h2>
+        <div class="radio-row">
+          <label class="radio">
+            <input type="radio" name="instrument" value="guitar" checked />
+            <span>Guitar</span>
+          </label>
+          <label class="radio">
+            <input type="radio" name="instrument" value="ukulele" />
+            <span>Ukulele</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Row widths</h2>
+        <p class="panel-note">
+          The first and last rows sit under the phone's edge gestures. Make them wider
+          until they feel as easy to hit as the rest.
+        </p>
+        <label class="slider">
+          <span class="slider-label">First row <output id="row-first-value">60%</output></span>
+          <input type="range" id="row-first" min="0" max="150" step="5" value="60" />
+        </label>
+        <label class="slider">
+          <span class="slider-label">Last row <output id="row-last-value">60%</output></span>
+          <input type="range" id="row-last" min="0" max="150" step="5" value="60" />
+        </label>
+      </section>
+
+      <section class="panel" id="pair-panel">
+        <h2>Pair the fretboard</h2>
+        <div id="pair-qr" class="qr"></div>
+        <p class="pair-code">Or type this code: <b id="pair-code">………</b></p>
+      </section>
+
+      <p id="pair-status" class="notice">Starting up…</p>
+
+      <button type="button" id="setup-done" class="wide-button" hidden>Done</button>
+
+      <section class="panel">
+        <h2>Settings file</h2>
+        <p class="panel-note">
+          A phone can clear its stored settings when it runs low on space. Keep a copy.
+        </p>
+        <div class="button-row">
+          <button type="button" id="config-export" class="button">Export</button>
+          <button type="button" id="config-import-button" class="button">Import</button>
+          <input type="file" id="config-import" accept="application/json,.json" hidden />
+        </div>
+      </section>
+    </section>
+
+    <!-- Strings: the playing surface. -->
+    <section id="screen-strings-play" class="screen" hidden>
+      <div id="strings-surface" class="surface">
+        <div id="strings-bands" class="bands"></div>
+        <div id="strings-chord" class="chord-badge">Open strings</div>
+        <button type="button" id="strings-settings" class="corner-button" data-ui-control aria-label="Settings">
+          ⚙
+        </button>
+        <div id="strings-banner" class="banner" data-ui-control hidden>
+          <span id="strings-banner-text">The phones disconnected.</span>
+          <button type="button" id="strings-banner-action" class="button button-small">Show code</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Fretboard: pairing. -->
+    <section id="screen-fretboard-scan" class="screen screen-pad screen-scroll" hidden>
+      <header class="masthead">
+        <h1>Fretboard</h1>
+      </header>
+
+      <div class="viewfinder">
+        <video id="scan-video" playsinline muted></video>
+        <div class="viewfinder-frame" aria-hidden="true"></div>
+      </div>
+
+      <p id="scan-status" class="notice">Point the camera at the code on the other phone.</p>
+
+      <details id="scan-manual" class="panel">
+        <summary>Type the code instead</summary>
+        <form id="scan-form" class="button-row">
+          <input
+            type="text"
+            id="scan-code"
+            class="text-input"
+            inputmode="latin"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            maxlength="12"
+            placeholder="abcd2345"
+            aria-label="Pairing code"
+          />
+          <button type="submit" class="button">Connect</button>
+        </form>
+      </details>
+    </section>
+
+    <!-- Fretboard: the grid. Absolutely static once rendered. -->
+    <section id="screen-fretboard-play" class="screen fretboard" hidden>
+      <header class="key-strip">
+        <button type="button" id="fretboard-lock" class="lock" aria-pressed="false" aria-label="Edit lock">
+          🔒
+        </button>
+        <button type="button" id="fretboard-key" class="key-name" disabled>C</button>
+        <span class="link-dot" aria-hidden="true"></span>
+      </header>
+
+      <div id="fretboard-grid" class="grid"></div>
+
+      <div id="fretboard-sheet" class="sheet" hidden></div>
+      <div id="fretboard-toast" class="toast" role="status" hidden></div>
+
+      <div id="fretboard-banner" class="banner" hidden>
+        <span>The phones disconnected.</span>
+        <button type="button" id="fretboard-rescan" class="button button-small">Scan again</button>
+      </div>
+    </section>
+  </body>
+</html>

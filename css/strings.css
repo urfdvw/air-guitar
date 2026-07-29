@@ -1,0 +1,122 @@
+/* The playing surface. One container hears every pointer; the bands below are
+   there to be looked at, not to be listened to. */
+
+.surface {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: radial-gradient(120% 80% at 50% 0%, #1b1714 0%, var(--bg) 70%);
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+.bands {
+  --first-band: 1.6;
+  --last-band: 1.6;
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* Dead margin inside the extreme edges, clear of the OS gesture zones. */
+  top: calc(var(--pad-top) + 15px);
+  bottom: calc(var(--pad-bottom) + 15px);
+  display: flex;
+  flex-direction: column;
+}
+
+.band {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  transition: background-color 140ms ease-out;
+}
+
+.band:first-child {
+  flex-grow: var(--first-band);
+}
+
+.band:last-child {
+  flex-grow: var(--last-band);
+}
+
+.band + .band {
+  border-top: 1px solid rgb(255 255 255 / 4%);
+}
+
+.band-wire {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--wire, 3px);
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    #6d6259 0%,
+    #b9ada0 45%,
+    #5c5249 100%
+  );
+  transition: filter 160ms ease-out, box-shadow 160ms ease-out;
+}
+
+.band-label {
+  position: absolute;
+  right: calc(var(--pad-right) + 16px);
+  /* Just clear of the wire, so the two never sit on top of each other. */
+  bottom: calc(50% + 7px);
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  opacity: 0.55;
+}
+
+.band.lit {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  transition: none;
+}
+
+.band.lit .band-wire {
+  filter: brightness(1.9) saturate(0.6);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 55%, transparent);
+  transition: none;
+}
+
+.chord-badge {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  color: rgb(243 237 230 / 8%);
+  font-size: clamp(44px, 20vw, 130px);
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+}
+
+/* "Open strings" is a sentence, not a chord name, and will not fit at that size. */
+.chord-badge.placeholder {
+  font-size: clamp(22px, 8vw, 44px);
+  letter-spacing: 0;
+}
+
+.corner-button {
+  position: absolute;
+  top: calc(var(--pad-top) + 2px);
+  left: calc(var(--pad-left) + 2px);
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: var(--muted);
+  font-size: 19px;
+  opacity: 0.45;
+}
+
+.corner-button:active {
+  opacity: 1;
+  background: rgb(255 255 255 / 8%);
+}

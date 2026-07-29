@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Air guitar">
+  <!-- Outline and gap match tools/make-icons.py; regenerate both together. -->
+  <defs>
+    <mask id="break">
+      <rect width="512" height="512" fill="#fff" />
+      <rect y="235.3" width="512" height="41.4" fill="#000" />
+    </mask>
+  </defs>
+  <rect width="512" height="512" fill="#141210" />
+  <path
+    d="M 256.0 85.8 C 329.6 85.8, 405.5 134.1, 405.5 207.7 C 405.5 269.8, 341.1 352.6, 290.5 405.5 C 272.1 425.0, 239.9 425.0, 221.5 405.5 C 170.9 352.6, 106.5 269.8, 106.5 207.7 C 106.5 134.1, 182.4 85.8, 256.0 85.8 Z"
+    fill="#e8a33c"
+    mask="url(#break)"
+  />
+</svg>

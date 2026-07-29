@@ -1,0 +1,9 @@
+{
+  "name": "air-guitar",
+  "private": true,
+  "type": "module",
+  "description": "Two phones, one strummed instrument. No build step - package.json exists only so `node --test` reads the source as ES modules.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}
