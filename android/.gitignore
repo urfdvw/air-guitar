@@ -1,0 +1,7 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+# Copied from the repository root at build time; the web app is the source.
+app/src/main/assets/www/

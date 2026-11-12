@@ -67,6 +67,8 @@
   grid-template-columns: 1fr 1fr;
   grid-template-rows: repeat(7, 1fr);
   gap: 8px;
+  /* Fingers slide between chords; the browser must not take that as a pan. */
+  touch-action: none;
 }
 
 .cell {
@@ -92,16 +94,16 @@
   font-size: 16px;
 }
 
+.strum-all:active {
+  background: color-mix(in srgb, var(--accent) 26%, var(--surface));
+}
+
 .cell-custom {
   background: var(--surface);
 }
 
 .cell-diatonic {
   background: var(--surface-lift);
-}
-
-.cell:active:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 26%, var(--surface));
 }
 
 .cell.active {

@@ -6,7 +6,7 @@
 // is network-first so a reload always picks up new code, with the cache only
 // standing in when the network does not answer.
 
-const CACHE = 'air-guitar-v1';
+const CACHE = 'air-guitar-v2';
 
 const SHELL = [
   './',
@@ -19,6 +19,8 @@ const SHELL = [
   'js/audio.js',
   'js/connection.js',
   'js/music.js',
+  'js/native.js',
+  'js/strum-input.js',
   'js/storage.js',
   'js/ui-fretboard.js',
   'js/ui-strings.js',

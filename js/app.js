@@ -17,6 +17,8 @@ import { chordLabel, chordPitchClasses, normalizeChord, spellPitchClass } from '
 import * as storage from './storage.js';
 import { FretboardUI } from './ui-fretboard.js';
 import { StringsSurface } from './ui-strings.js';
+import { isNative, log } from './native.js';
+import { StrumInput, buildStrumSettings } from './strum-input.js';
 import { fretsFor, getInstrument, openStrings, voiceChord } from './voicing.js';
 
 const $ = (id) => document.getElementById(id);
@@ -109,6 +111,28 @@ function startStrings(audio) {
   const persist = () => storage.saveConfig(config);
 
   const pushConfig = () => host?.send(MSG.CONFIG, storage.configForFretboard(config));
+
+  // Touch (the bands), the force button, or edge scratching. Only the Android
+  // app offers the last two.
+  const applyStrumMode = (mode) => {
+    surface.setEnabled(mode === 'touch');
+    $('strings-force').hidden = mode !== 'force';
+    $('strings-scratch-hint').hidden = mode !== 'scratch';
+  };
+  const strumInput = new StrumInput({
+    audio,
+    getPitches: () => pitches,
+    onModeChange: applyStrumMode,
+    onStrum: () => surface.flashAll(),
+  });
+  const teardownStrumSettings = buildStrumSettings($('strings-strum-input'), strumInput, {
+    radioName: 'strings-strum-mode',
+  });
+  $('strings-force').addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    strumInput.forcePress();
+  });
+  applyStrumMode(strumInput.mode);
 
   const applyVoicing = () => {
     const instrument = getInstrument(config.instrument);
@@ -236,6 +260,7 @@ function startStrings(audio) {
       if (type === MSG.CHORD) {
         activeChord = normalizeChord(payload);
         applyVoicing();
+        if (isNative) log(`chord <- ${activeChord ? chordLabel(config.key, activeChord) : 'open'}`);
       } else if (type === MSG.EDIT) {
         onEdit(payload);
       }
@@ -265,6 +290,8 @@ function startStrings(audio) {
   currentTeardown = () => {
     host?.destroy();
     surface.destroy();
+    teardownStrumSettings();
+    strumInput.destroy();
   };
 
   fillForm();
@@ -419,6 +446,7 @@ function startStandalone(audio) {
     onChord: (chord) => {
       activeChord = chord;
       applyVoicing();
+      if (isNative) log(`chord = ${chord ? chordLabel(config.key, chord) : 'open'}`);
     },
     onEdit: (edit) => {
       const result = storage.applyEdit(config, edit);
@@ -455,14 +483,38 @@ function startStandalone(audio) {
     settingsSheet.hidden = true;
   });
 
-  $('standalone-strum').addEventListener('pointerdown', (event) => {
+  const strumButton = $('standalone-strum');
+  const strumLabels = {
+    touch: 'Strum all strings',
+    force: 'Strum · hit harder for louder',
+    scratch: 'Scratch the phone’s edge to strum',
+  };
+  const strumInput = new StrumInput({
+    audio,
+    getPitches: () => pitches,
+    onModeChange: (mode) => {
+      strumButton.textContent = strumLabels[mode];
+    },
+  });
+  strumButton.textContent = strumLabels[strumInput.mode];
+  const teardownStrumSettings = buildStrumSettings($('standalone-strum-input'), strumInput, {
+    radioName: 'standalone-strum-mode',
+  });
+
+  strumButton.addEventListener('pointerdown', (event) => {
     event.preventDefault();
-    pitches.forEach((midi, index) => audio.pluck(index, midi));
+    // In scratch mode the button still strums by touch, as a fallback.
+    if (strumInput.mode === 'force') strumInput.forcePress();
+    else strumInput.touchStrum();
   });
 
   $('standalone-back').addEventListener('click', () => goToRole());
 
-  currentTeardown = () => audio.stopAll();
+  currentTeardown = () => {
+    audio.stopAll();
+    teardownStrumSettings();
+    strumInput.destroy();
+  };
 
   ui.setConfig(config);
   applyInstrument();
@@ -501,7 +553,9 @@ function boot() {
   });
 }
 
-if ('serviceWorker' in navigator) {
+// The Android app ships its files inside the APK; a service worker there would
+// only serve stale copies.
+if ('serviceWorker' in navigator && !isNative) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(() => {
       // The app runs without it; only installability suffers.

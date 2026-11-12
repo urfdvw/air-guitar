@@ -97,3 +97,53 @@
   opacity: 1;
   background: rgb(255 255 255 / 8%);
 }
+
+/* -- other strum inputs (Android app only) ----------------------------------- */
+
+.surface-passive .band.lit {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.force-pad {
+  position: absolute;
+  left: calc(var(--pad-left) + 16px);
+  right: calc(var(--pad-right) + 16px);
+  top: calc(var(--pad-top) + 64px);
+  bottom: calc(var(--pad-bottom) + 16px);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  touch-action: none;
+}
+
+.force-pad:active {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+}
+
+.force-pad-name {
+  font-size: 28px;
+  font-weight: 650;
+}
+
+.force-pad-note {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.scratch-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--pad-bottom) + 28px);
+  z-index: 3;
+  pointer-events: none;
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+}

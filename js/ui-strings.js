@@ -26,6 +26,7 @@ export class StringsSurface {
     this.boundaries = [];
     this.pointers = new Map(); // pointerId -> last band index, or null
     this.instrument = null;
+    this.enabled = true;
 
     surface.addEventListener('pointerdown', this.#onDown, { passive: false });
     surface.addEventListener('pointermove', this.#onMove, { passive: false });
@@ -112,6 +113,10 @@ export class StringsSurface {
 
   #pluck(index) {
     this.onPluck(index);
+    this.#flash(index);
+  }
+
+  #flash(index) {
     const entry = this.bandElements[index];
     if (!entry) return;
     entry.band.classList.remove('lit');
@@ -121,10 +126,23 @@ export class StringsSurface {
     entry.timer = setTimeout(() => entry.band.classList.remove('lit'), FLASH_MS);
   }
 
+  /** With another strum input in use, the bands only show the voicing. */
+  setEnabled(enabled) {
+    this.enabled = enabled;
+    this.pointers.clear();
+    this.surface.classList.toggle('surface-passive', !enabled);
+  }
+
+  /** Lights every band at once, for strums that did not come from a swipe. */
+  flashAll() {
+    this.bandElements.forEach((_, index) => this.#flash(index));
+  }
+
   #onDown = (event) => {
     // Controls layered over the surface keep their own taps.
     if (event.target.closest('[data-ui-control]')) return;
     event.preventDefault();
+    if (!this.enabled) return;
 
     const index = this.bandAt(event.clientY);
     this.pointers.set(event.pointerId, index);

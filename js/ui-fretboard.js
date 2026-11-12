@@ -27,6 +27,13 @@ function button(className, text) {
   return element;
 }
 
+// Cells are never `disabled`: a disabled button may swallow the pointerdown that
+// starts a hold, and the grid has to hear every finger.
+function setInert(cell, inert) {
+  cell.classList.toggle('inert', inert);
+  cell.setAttribute('aria-disabled', String(inert));
+}
+
 export class FretboardUI {
   /**
    * @param {object} options
@@ -40,6 +47,10 @@ export class FretboardUI {
     this.config = { key: 'C', customSlots: Array(SLOT_COUNT).fill(null) };
     this.editing = false;
     this.activeCell = null;
+    // pointerId -> { cell, seq }. The held cell entered most recently wins;
+    // when no finger is on a chord the instrument goes back to open strings.
+    this.holds = new Map();
+    this.holdSeq = 0;
 
     this.keyButton = root.querySelector('.key-name');
     this.lockButton = root.querySelector('.lock');
@@ -71,15 +82,36 @@ export class FretboardUI {
     for (let row = 0; row < SLOT_COUNT; row += 1) {
       const custom = button('cell cell-custom');
       custom.dataset.slot = String(row);
-      custom.addEventListener('pointerdown', (event) => this.#onCustomPress(event, row));
+      custom.dataset.column = 'custom';
+      custom.dataset.row = String(row);
       this.grid.append(custom);
       this.customCells.push(custom);
 
       const diatonic = button('cell cell-diatonic');
-      diatonic.addEventListener('pointerdown', (event) => this.#onDiatonicPress(event, row));
+      diatonic.dataset.column = 'diatonic';
+      diatonic.dataset.row = String(row);
       this.grid.append(diatonic);
       this.diatonicCells.push(diatonic);
     }
+
+    // Chords follow where fingers are held, not where they went down. One
+    // listener on the grid reads coordinates, because a touch pointer stays
+    // captured by the cell it first landed on and the cells it slides into
+    // never hear it.
+    this.grid.addEventListener('pointerdown', this.#onGridDown, { passive: false });
+    this.grid.addEventListener('pointermove', this.#onGridMove, { passive: false });
+    this.grid.addEventListener('pointerup', this.#onGridUp, { passive: false });
+    this.grid.addEventListener('pointercancel', this.#onGridUp, { passive: false });
+    this.grid.addEventListener('lostpointercapture', this.#onGridUp);
+    this.grid.addEventListener('contextmenu', (event) => event.preventDefault());
+    // Editing is a tap: the left column opens its sheet, the right is fixed.
+    // On click rather than pointerdown, or the click that follows would land
+    // on the freshly opened sheet's backdrop and close it again.
+    this.grid.addEventListener('click', (event) => {
+      if (!this.editing) return;
+      const target = event.target.closest?.('.cell');
+      if (target?.dataset.column === 'custom') this.#openSlotSheet(Number(target.dataset.row));
+    });
   }
 
   #wireLock() {
@@ -114,6 +146,7 @@ export class FretboardUI {
 
   #setEditing(editing) {
     this.editing = editing;
+    if (editing) this.releaseAll();
     this.root.classList.toggle('editing', editing);
     this.lockButton.setAttribute('aria-pressed', String(editing));
     this.lockButton.textContent = editing ? '🔓' : '🔒';
@@ -138,7 +171,7 @@ export class FretboardUI {
     this.diatonicCells.forEach((cell, row) => {
       const chord = DIATONIC_ROWS[row];
       cell.textContent = chordLabel(key, chord);
-      cell.disabled = this.editing;
+      setInert(cell, this.editing);
     });
 
     this.customCells.forEach((cell, row) => {
@@ -147,10 +180,16 @@ export class FretboardUI {
       cell.classList.toggle('empty', empty);
       cell.textContent = empty ? 'Add chord' : chordLabel(key, chord);
       // Empty slots are inert placeholders until the lock is open.
-      cell.disabled = empty && !this.editing;
+      setInert(cell, empty && !this.editing);
     });
 
-    // The latched chord keeps its highlight; only its label may have changed.
+    // A held cell whose slot was just emptied can no longer sound.
+    if (this.activeCell && !this.#chordFor(this.activeCell)) {
+      for (const hold of this.holds.values()) {
+        if (hold.cell === this.activeCell) hold.cell = null;
+      }
+      this.#resolveHold();
+    }
     this.#paintActive();
   }
 
@@ -159,26 +198,65 @@ export class FretboardUI {
     cells.forEach((cell) => cell.classList.toggle('active', cell === this.activeCell));
   }
 
-  #play(cell, chord) {
+  /** The playable cell under a viewport point, or null for gaps and empty slots. */
+  #cellAt(x, y) {
+    const hit = document.elementFromPoint(x, y)?.closest?.('.cell');
+    if (!hit || !this.grid.contains(hit)) return null;
+    return this.#chordFor(hit) ? hit : null;
+  }
+
+  #chordFor(cell) {
+    const row = Number(cell.dataset.row);
+    if (cell.dataset.column === 'diatonic') return DIATONIC_ROWS[row];
+    return this.config.customSlots[row] || null;
+  }
+
+  /** Re-derives the sounding chord from the fingers currently held. */
+  #resolveHold() {
+    let best = null;
+    for (const hold of this.holds.values()) {
+      if (hold.cell && (!best || hold.seq > best.seq)) best = hold;
+    }
+    const cell = best ? best.cell : null;
+    if (cell === this.activeCell) return;
     this.activeCell = cell;
     this.#paintActive();
-    this.onChord(chord);
+    this.onChord(cell ? this.#chordFor(cell) : null);
   }
 
-  #onDiatonicPress(event, row) {
-    if (this.editing) return; // the right column is fixed
+  #onGridDown = (event) => {
     event.preventDefault();
-    this.#play(this.diatonicCells[row], DIATONIC_ROWS[row]);
-  }
+    if (this.editing) return; // editing is a tap, handled on click
+    const cell = this.#cellAt(event.clientX, event.clientY);
+    this.holdSeq += 1;
+    this.holds.set(event.pointerId, { cell, seq: this.holdSeq });
+    this.#resolveHold();
+  };
 
-  #onCustomPress(event, row) {
+  #onGridMove = (event) => {
+    const hold = this.holds.get(event.pointerId);
+    if (!hold) return;
     event.preventDefault();
-    if (this.editing) {
-      this.#openSlotSheet(row);
-      return;
-    }
-    const chord = this.config.customSlots[row];
-    if (chord) this.#play(this.customCells[row], chord);
+    const cell = this.#cellAt(event.clientX, event.clientY);
+    // Sliding through a gap or off the grid keeps the last chord: only lifting
+    // the finger lets go of it.
+    if (!cell || cell === hold.cell) return;
+    this.holdSeq += 1;
+    hold.cell = cell;
+    hold.seq = this.holdSeq;
+    this.#resolveHold();
+  };
+
+  #onGridUp = (event) => {
+    if (!this.holds.delete(event.pointerId)) return;
+    this.#resolveHold();
+  };
+
+  /** Lets go of every held chord, e.g. when edit mode opens. */
+  releaseAll() {
+    if (!this.holds.size && !this.activeCell) return;
+    this.holds.clear();
+    this.#resolveHold();
   }
 
   // -- sheets ---------------------------------------------------------------

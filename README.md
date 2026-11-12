@@ -30,6 +30,47 @@ app falls back to typing the eight-character code by hand.
 Add it to the home screen on both phones. It runs in `standalone` display mode,
 and the address bar costs a meaningful slice of strum travel.
 
+## Chord grid
+
+A chord sounds while a finger is held on it. Sliding onto another cell changes
+the chord without lifting; with several fingers down, the one that most
+recently landed on or slid into a cell wins. Lifting every finger goes back to
+open strings. (Editing, behind the lock, is still a tap.)
+
+## Android app
+
+`android/` is the same web app in a full-screen WebView, plus a native bridge
+(`window.AirGuitarAndroid`, see `js/native.js`) that reads the accelerometer at
+its full rate. It adds two strum inputs, chosen under **Strum input** in the
+strings settings or the standalone settings sheet:
+
+- **Force button** - one big button; how hard it is hit sets the volume.
+- **Edge scratch** - scrape a nail or pick across the phone's edge; each bump
+  is a strum, its strength sets the volume, and up/down is guessed from the
+  long-axis direction when it is clear.
+
+Touch stays available. The browser never shows these options.
+
+The web files are copied into the APK at build time, so there is one source.
+CI (`.github/workflows/android.yml`) builds a debug APK on every push: open the
+run under the repository's **Actions** tab and download the
+`air-guitar-debug-*` artifact. Builds share one committed debug key, so a new
+APK installs over the previous one.
+
+### Logs
+
+Every hit, force press, chord change and setting change is logged, together
+with the device and sensor details.
+
+- **From the app:** settings, **Strum input**, **Export log** opens the share
+  sheet with this session's log and any traces. **Record 10 s** saves a CSV of
+  raw and high-passed accelerometer samples, marked with touches and hits,
+  which is what to record while trying a scratch or tap that misbehaves.
+- **Over USB:** `adb logcat -s AirGuitar` live, or
+  `adb pull /sdcard/Android/data/io.github.urfdvw.airguitar/files/logs` for
+  the files.
+- `chrome://inspect` on a computer can attach to the WebView.
+
 ## Tests
 
 ```sh

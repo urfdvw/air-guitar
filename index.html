@@ -87,6 +87,9 @@
         </label>
       </section>
 
+      <!-- Android app only: filled in by js/strum-input.js. -->
+      <section class="panel" id="strings-strum-input" hidden></section>
+
       <section class="panel" id="pair-panel">
         <h2>Pair the fretboard</h2>
         <div id="pair-qr" class="qr"></div>
@@ -118,6 +121,13 @@
         <button type="button" id="strings-settings" class="corner-button" data-ui-control aria-label="Settings">
           ⚙
         </button>
+        <button type="button" id="strings-force" class="force-pad" data-ui-control hidden>
+          <span class="force-pad-name">Strum</span>
+          <span class="force-pad-note">Hit harder for louder</span>
+        </button>
+        <div id="strings-scratch-hint" class="scratch-hint" hidden>
+          Scratch the phone’s edge to strum
+        </div>
         <div id="strings-banner" class="banner" data-ui-control hidden>
           <span id="strings-banner-text">The phones disconnected.</span>
           <button type="button" id="strings-banner-action" class="button button-small">Show code</button>
@@ -216,6 +226,8 @@
               <span>Ukulele</span>
             </label>
           </div>
+          <!-- Android app only: filled in by js/strum-input.js. -->
+          <div id="standalone-strum-input" class="strum-input-sheet" hidden></div>
           <button type="button" id="standalone-settings-done" class="wide-button">Done</button>
         </div>
       </div>

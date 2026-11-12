@@ -186,14 +186,18 @@ export class StringAudio {
     if (this.instrument === instrument) this.buffers = buffers;
   }
 
-  /** Sounds one string at an absolute MIDI pitch, replacing whatever it was ringing. */
-  pluck(stringIndex, midi) {
+  /**
+   * Sounds one string at an absolute MIDI pitch, replacing whatever it was ringing.
+   * @param {number} [velocity] 0..1 loudness; 1 is the level a touch pluck has always had
+   * @param {number} [delay] seconds from now, for spreading a strum across strings
+   */
+  pluck(stringIndex, midi, velocity = 1, delay = 0) {
     if (!this.ready || !Number.isFinite(midi)) return;
     const buffer = this.buffers[stringIndex];
     if (!buffer) return;
     if (this.context.state !== 'running') this.context.resume();
 
-    const now = this.context.currentTime;
+    const now = this.context.currentTime + Math.max(0, delay);
     this.#release(stringIndex, now);
 
     const source = this.context.createBufferSource();
@@ -203,7 +207,8 @@ export class StringAudio {
 
     const gain = this.context.createGain();
     // A touch of variation so repeated strums do not sound machine-stamped.
-    gain.gain.value = 0.62 * (0.94 + Math.random() * 0.12);
+    const level = Math.min(1, Math.max(0, Number.isFinite(velocity) ? velocity : 1));
+    gain.gain.value = 0.62 * level * (0.94 + Math.random() * 0.12);
 
     const panner = this.context.createStereoPanner
       ? this.context.createStereoPanner()
@@ -243,6 +248,21 @@ export class StringAudio {
     } catch {
       // already stopped
     }
+  }
+
+  /**
+   * Plucks every string in strumming order: down runs from the first string in
+   * layout order to the last, up the other way.
+   * @param {number[]} pitches one MIDI pitch per string, layout order
+   * @param {{velocity?: number, direction?: 'down'|'up', spread?: number}} [options]
+   *   spread is the gap between neighbouring strings in seconds
+   */
+  strum(pitches, { velocity = 1, direction = 'down', spread = 0 } = {}) {
+    const order = pitches.map((_, index) => index);
+    if (direction === 'up') order.reverse();
+    order.forEach((stringIndex, step) => {
+      this.pluck(stringIndex, pitches[stringIndex], velocity, step * spread);
+    });
   }
 
   stopAll() {
