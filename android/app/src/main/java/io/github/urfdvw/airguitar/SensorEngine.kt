@@ -32,8 +32,8 @@ import kotlin.math.sqrt
  * Why jerk and not magnitude: field traces show a strike on the phone's side
  * edge going from ~0.2 to ~9 m/s² within one 2.5 ms sample, while hand
  * movement reaches 3 m/s² smoothly. Magnitude cannot tell those apart; the
- * step between samples can. Strikes on the side edge also land on the x axis,
- * while fingers on the screen land on z, which is the second filter.
+ * step between samples can. Which axes a hit lands on is passed to the page,
+ * which reads strum direction from it.
  */
 class SensorEngine(context: Context, private val onHit: (Hit) -> Unit, private val onTraceDone: (File?) -> Unit) :
     SensorEventListener {
@@ -44,9 +44,8 @@ class SensorEngine(context: Context, private val onHit: (Hit) -> Unit, private v
         val scratch: Boolean = false,
         val threshold: Float = 1.5f,
         val refractoryMs: Float = 90f,
-        val peakWindowMs: Float = 4f,
+        val peakWindowMs: Float = 15f,
         val touchSuppressMs: Float = 80f,
-        val rejectScreenAxis: Boolean = true,
         val highPassHz: Float = 2f,
     )
 
@@ -320,15 +319,6 @@ class SensorEngine(context: Context, private val onHit: (Hit) -> Unit, private v
             }
             if (t >= armedUntilNs) {
                 armedUntilNs = 0L
-                // A finger on the glass pushes along z; a strike on the edge does not.
-                if (cfg.rejectScreenAxis && kotlin.math.abs(peakZ) > max(kotlin.math.abs(peakX), kotlin.math.abs(peakY))) {
-                    AppLog.i(
-                        String.format(
-                            Locale.US, "bump %.2f ignored: screen axis h=(%.2f,%.2f,%.2f)", peak, peakX, peakY, peakZ,
-                        ),
-                    )
-                    return "reject-z"
-                }
                 return fire(t)
             }
             return null

@@ -62,9 +62,8 @@ class NativeBridge(private val activity: Activity, private val webView: WebView)
                 scratch = o.optBoolean("scratch", false),
                 threshold = o.optDouble("threshold", 1.5).toFloat(),
                 refractoryMs = o.optDouble("refractoryMs", 90.0).toFloat(),
-                peakWindowMs = o.optDouble("peakWindowMs", 4.0).toFloat(),
+                peakWindowMs = o.optDouble("peakWindowMs", 15.0).toFloat(),
                 touchSuppressMs = o.optDouble("touchSuppressMs", 80.0).toFloat(),
-                rejectScreenAxis = o.optBoolean("rejectScreenAxis", true),
             )
             if (next != sensors.config) {
                 sensors.config = next

@@ -17,9 +17,9 @@ import { isNative, log, native, onNativeEvent } from './native.js';
 
 export const MODES = ['touch', 'force', 'scratch'];
 
-// v2: the scratch trigger changed from strength to jerk, so v1 levels no
-// longer mean the same thing and are dropped.
-const STORAGE_KEY = 'air-guitar.strum-input.v2';
+// v3: the scratch trigger changed from strength to jerk (v2) and direction
+// now comes from the z/x balance (v3), so older saved levels are dropped.
+const STORAGE_KEY = 'air-guitar.strum-input.v3';
 
 /** Every tunable, with its range. Units are in the labels. */
 export const FIELDS = {
@@ -33,15 +33,16 @@ export const FIELDS = {
   scratchSoft: { label: 'Quietest at', unit: 'm/s²', min: 0, max: 20, step: 0.5, value: 1.5 },
   scratchMax: { label: 'Loudest at', unit: 'm/s²', min: 0.5, max: 40, step: 0.5, value: 12 },
   scratchRefractoryMs: { label: 'Gap between strums', unit: 'ms', min: 20, max: 400, step: 5, value: 90 },
-  scratchPeakWindowMs: { label: 'Measure for', unit: 'ms', min: 0, max: 30, step: 1, value: 4 },
+  // Up-strokes build more slowly than down-strokes: their peak came up to
+  // 10-17 ms after the first jump in the field trace.
+  scratchPeakWindowMs: { label: 'Measure for', unit: 'ms', min: 0, max: 30, step: 1, value: 15 },
+  upRatio: { label: 'Up-stroke when z / x above', unit: '', min: 0.2, max: 3, step: 0.05, value: 0.8 },
   touchSuppressMs: { label: 'Ignore after a screen touch', unit: 'ms', min: 0, max: 300, step: 5, value: 80 },
   spreadMs: { label: 'Strum spread', unit: 'ms/string', min: 0, max: 40, step: 1, value: 8 },
 };
 
 export function defaultSettings() {
-  // Field traces: edge strikes all push the same way, so the sign says nothing
-  // about direction yet. Off until a gesture that shows it is found.
-  const settings = { mode: 'touch', detectDirection: false, flipDirection: false, rejectScreenAxis: true };
+  const settings = { mode: 'touch', detectDirection: true, flipDirection: false };
   Object.entries(FIELDS).forEach(([key, field]) => {
     settings[key] = field.value;
   });
@@ -54,7 +55,6 @@ export function normalizeSettings(raw) {
   if (MODES.includes(raw.mode)) settings.mode = raw.mode;
   if (typeof raw.detectDirection === 'boolean') settings.detectDirection = raw.detectDirection;
   if (typeof raw.flipDirection === 'boolean') settings.flipDirection = raw.flipDirection;
-  if (typeof raw.rejectScreenAxis === 'boolean') settings.rejectScreenAxis = raw.rejectScreenAxis;
   Object.entries(FIELDS).forEach(([key, field]) => {
     const number = Number(raw[key]);
     if (Number.isFinite(number)) settings[key] = Math.min(field.max, Math.max(field.min, number));
@@ -151,7 +151,6 @@ export class StrumInput {
       refractoryMs: s.scratchRefractoryMs,
       peakWindowMs: s.scratchPeakWindowMs,
       touchSuppressMs: s.touchSuppressMs,
-      rejectScreenAxis: s.rejectScreenAxis,
     });
     this.#pushActive();
   }
@@ -194,20 +193,16 @@ export class StrumInput {
     const strength = Number(event.strength);
     const velocity = velocityFor(strength, s.scratchSoft, s.scratchMax);
 
+    // Field trace: down-strokes land almost entirely on x (the short axis,
+    // |z|/|x| under 0.45), up-strokes carry as much z as x or more (1.5-1.6).
+    // The sign of either axis did not change between the two.
     let direction = 'down';
-    let directionNote = 'fixed';
-    if (s.detectDirection) {
-      // Scraping along the long edge pushes the phone along its long (y) axis.
-      // Only trust the sign when that axis carries most of the bump.
-      const along = Number(event.hy);
-      if (Number.isFinite(along) && Math.abs(along) >= 0.6 * strength) {
-        direction = along > 0 ? 'down' : 'up';
-        if (s.flipDirection) direction = direction === 'down' ? 'up' : 'down';
-        directionNote = 'detected';
-      } else {
-        directionNote = 'ambiguous';
-      }
+    const ratio = Math.abs(Number(event.hz)) / Math.max(0.01, Math.abs(Number(event.hx)));
+    if (s.detectDirection && Number.isFinite(ratio)) {
+      direction = ratio >= s.upRatio ? 'up' : 'down';
+      if (s.flipDirection) direction = direction === 'down' ? 'up' : 'down';
     }
+    const directionNote = s.detectDirection ? `z/x=${ratio.toFixed(2)}` : 'fixed';
 
     this.audio.strum(this.getPitches(), { velocity, direction, spread: s.spreadMs / 1000 });
     this.onStrum();
@@ -251,6 +246,7 @@ const GROUPS = [
       'scratchMax',
       'scratchRefractoryMs',
       'scratchPeakWindowMs',
+      'upRatio',
       'touchSuppressMs',
     ],
   },
@@ -309,7 +305,6 @@ export function buildStrumSettings(container, input, { radioName }) {
     group.fields.forEach((key) => box.append(slider(key, input)));
     if (group.title === 'Edge scratch') {
       box.append(
-        checkbox('Ignore bumps from the screen side', 'rejectScreenAxis', input),
         checkbox('Detect up / down', 'detectDirection', input),
         checkbox('Flip up / down', 'flipDirection', input),
       );
