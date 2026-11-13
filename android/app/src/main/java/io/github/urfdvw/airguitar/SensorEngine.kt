@@ -26,8 +26,14 @@ import kotlin.math.sqrt
  *
  *  - a ring of the last second of samples answers "how hard was that tap" for
  *    the force button, which asks just after the touch arrives;
- *  - with scratch detection on, a rising edge over the threshold starts a hit,
- *    measured for a few ms and then reported through [onHit].
+ *  - with scratch detection on, a sudden jump between consecutive raw samples
+ *    (jerk) starts a hit, measured for a few ms and reported through [onHit].
+ *
+ * Why jerk and not magnitude: field traces show a strike on the phone's side
+ * edge going from ~0.2 to ~9 m/s² within one 2.5 ms sample, while hand
+ * movement reaches 3 m/s² smoothly. Magnitude cannot tell those apart; the
+ * step between samples can. Strikes on the side edge also land on the x axis,
+ * while fingers on the screen land on z, which is the second filter.
  */
 class SensorEngine(context: Context, private val onHit: (Hit) -> Unit, private val onTraceDone: (File?) -> Unit) :
     SensorEventListener {
@@ -40,6 +46,7 @@ class SensorEngine(context: Context, private val onHit: (Hit) -> Unit, private v
         val refractoryMs: Float = 90f,
         val peakWindowMs: Float = 4f,
         val touchSuppressMs: Float = 80f,
+        val rejectScreenAxis: Boolean = true,
         val highPassHz: Float = 2f,
     )
 
@@ -62,6 +69,9 @@ class SensorEngine(context: Context, private val onHit: (Hit) -> Unit, private v
     private var gz = 0f
     private var primed = false
     private var lastSampleNs = 0L
+    private var px = 0f
+    private var py = 0f
+    private var pz = 0f
 
     // -- ring of recent samples (guarded by `ring`) --
     private val size = 2048
@@ -198,7 +208,7 @@ class SensorEngine(context: Context, private val onHit: (Hit) -> Unit, private v
             val file = AppLog.newFile("trace", "csv")
             traceFile = file
             trace = BufferedWriter(FileWriter(file)).apply {
-                write("t_ms,ax,ay,az,hx,hy,hz,mag,event")
+                write("t_ms,ax,ay,az,hx,hy,hz,mag,jerk,event")
                 newLine()
             }
             traceStartNs = SystemClock.elapsedRealtimeNanos()
@@ -238,6 +248,9 @@ class SensorEngine(context: Context, private val onHit: (Hit) -> Unit, private v
             gx = ax
             gy = ay
             gz = az
+            px = ax
+            py = ay
+            pz = az
             primed = true
             lastSampleNs = t
             return
@@ -255,6 +268,13 @@ class SensorEngine(context: Context, private val onHit: (Hit) -> Unit, private v
         val hy = ay - gy
         val hz = az - gz
         val mag = sqrt(hx * hx + hy * hy + hz * hz)
+        val jx = ax - px
+        val jy = ay - py
+        val jz = az - pz
+        val jerk = sqrt(jx * jx + jy * jy + jz * jz)
+        px = ax
+        py = ay
+        pz = az
 
         synchronized(ring) {
             ringT[ringHead] = t
@@ -270,15 +290,15 @@ class SensorEngine(context: Context, private val onHit: (Hit) -> Unit, private v
         val cfg = config
         var traceEvent = pendingTraceEvent
         pendingTraceEvent = null
-        if (cfg.scratch) traceEvent = detect(t, hx, hy, hz, mag, cfg) ?: traceEvent
+        if (cfg.scratch) traceEvent = detect(t, hx, hy, hz, mag, jerk, cfg) ?: traceEvent
 
         trace?.let { writer ->
             try {
                 writer.write(
                     String.format(
                         Locale.US,
-                        "%.3f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%s",
-                        (t - traceStartNs) / 1e6, ax, ay, az, hx, hy, hz, mag, traceEvent ?: "",
+                        "%.3f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%s",
+                        (t - traceStartNs) / 1e6, ax, ay, az, hx, hy, hz, mag, jerk, traceEvent ?: "",
                     ),
                 )
                 writer.newLine()
@@ -289,7 +309,7 @@ class SensorEngine(context: Context, private val onHit: (Hit) -> Unit, private v
     }
 
     /** Scratch detection. Returns a note for the trace when something happened. */
-    private fun detect(t: Long, hx: Float, hy: Float, hz: Float, mag: Float, cfg: Config): String? {
+    private fun detect(t: Long, hx: Float, hy: Float, hz: Float, mag: Float, jerk: Float, cfg: Config): String? {
         if (armedUntilNs != 0L) {
             if (mag > peak) {
                 peak = mag
@@ -300,25 +320,38 @@ class SensorEngine(context: Context, private val onHit: (Hit) -> Unit, private v
             }
             if (t >= armedUntilNs) {
                 armedUntilNs = 0L
+                // A finger on the glass pushes along z; a strike on the edge does not.
+                if (cfg.rejectScreenAxis && kotlin.math.abs(peakZ) > max(kotlin.math.abs(peakX), kotlin.math.abs(peakY))) {
+                    AppLog.i(
+                        String.format(
+                            Locale.US, "bump %.2f ignored: screen axis h=(%.2f,%.2f,%.2f)", peak, peakX, peakY, peakZ,
+                        ),
+                    )
+                    return "reject-z"
+                }
                 return fire(t)
             }
             return null
         }
 
-        val crossing = mag > cfg.threshold
-        val rising = crossing && !above
-        above = mag > cfg.threshold * 0.6f // a little hysteresis before re-arming
-        if (!rising) return null
+        // Hysteresis: once over the threshold, stay "above" until the jerk
+        // falls back under half of it. Only a crossing from below is a hit.
+        if (above) {
+            above = jerk > cfg.threshold * 0.5f
+            return null
+        }
+        if (jerk <= cfg.threshold) return null
+        above = true
 
         val sinceFireMs = (t - lastFireNs) / 1e6f
         val sinceTouchMs = (SystemClock.elapsedRealtimeNanos() - lastTouchNs) / 1e6f
         when {
             sinceFireMs < cfg.refractoryMs -> {
-                AppLog.i(String.format(Locale.US, "cross %.2f ignored: %.0fms since last hit", mag, sinceFireMs))
+                AppLog.i(String.format(Locale.US, "jerk %.2f ignored: %.0fms since last hit", jerk, sinceFireMs))
                 return "cross-refractory"
             }
             sinceTouchMs < cfg.touchSuppressMs -> {
-                AppLog.i(String.format(Locale.US, "cross %.2f ignored: %.0fms since screen touch", mag, sinceTouchMs))
+                AppLog.i(String.format(Locale.US, "jerk %.2f ignored: %.0fms since screen touch", jerk, sinceTouchMs))
                 return "cross-touch"
             }
         }

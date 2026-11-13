@@ -17,7 +17,9 @@ import { isNative, log, native, onNativeEvent } from './native.js';
 
 export const MODES = ['touch', 'force', 'scratch'];
 
-const STORAGE_KEY = 'air-guitar.strum-input.v1';
+// v2: the scratch trigger changed from strength to jerk, so v1 levels no
+// longer mean the same thing and are dropped.
+const STORAGE_KEY = 'air-guitar.strum-input.v2';
 
 /** Every tunable, with its range. Units are in the labels. */
 export const FIELDS = {
@@ -25,8 +27,11 @@ export const FIELDS = {
   tapMax: { label: 'Hard tap', unit: 'm/s²', min: 0.5, max: 40, step: 0.5, value: 8 },
   tapDelayMs: { label: 'Wait for the bump', unit: 'ms', min: 0, max: 60, step: 1, value: 18 },
   tapWindowMs: { label: 'Look back', unit: 'ms', min: 10, max: 150, step: 5, value: 60 },
-  scratchThreshold: { label: 'Trigger level', unit: 'm/s²', min: 0.1, max: 20, step: 0.1, value: 1.5 },
-  scratchMax: { label: 'Loudest at', unit: 'm/s²', min: 0.5, max: 40, step: 0.5, value: 10 },
+  // Jump between two consecutive samples (2.5 ms apart at 400 Hz). A strike on
+  // the edge jumps by several m/s² at once; moving the hand never does.
+  scratchThreshold: { label: 'Trigger sharpness', unit: 'm/s²/sample', min: 0.3, max: 15, step: 0.1, value: 1.5 },
+  scratchSoft: { label: 'Quietest at', unit: 'm/s²', min: 0, max: 20, step: 0.5, value: 1.5 },
+  scratchMax: { label: 'Loudest at', unit: 'm/s²', min: 0.5, max: 40, step: 0.5, value: 12 },
   scratchRefractoryMs: { label: 'Gap between strums', unit: 'ms', min: 20, max: 400, step: 5, value: 90 },
   scratchPeakWindowMs: { label: 'Measure for', unit: 'ms', min: 0, max: 30, step: 1, value: 4 },
   touchSuppressMs: { label: 'Ignore after a screen touch', unit: 'ms', min: 0, max: 300, step: 5, value: 80 },
@@ -34,7 +39,9 @@ export const FIELDS = {
 };
 
 export function defaultSettings() {
-  const settings = { mode: 'touch', detectDirection: true, flipDirection: false };
+  // Field traces: edge strikes all push the same way, so the sign says nothing
+  // about direction yet. Off until a gesture that shows it is found.
+  const settings = { mode: 'touch', detectDirection: false, flipDirection: false, rejectScreenAxis: true };
   Object.entries(FIELDS).forEach(([key, field]) => {
     settings[key] = field.value;
   });
@@ -47,6 +54,7 @@ export function normalizeSettings(raw) {
   if (MODES.includes(raw.mode)) settings.mode = raw.mode;
   if (typeof raw.detectDirection === 'boolean') settings.detectDirection = raw.detectDirection;
   if (typeof raw.flipDirection === 'boolean') settings.flipDirection = raw.flipDirection;
+  if (typeof raw.rejectScreenAxis === 'boolean') settings.rejectScreenAxis = raw.rejectScreenAxis;
   Object.entries(FIELDS).forEach(([key, field]) => {
     const number = Number(raw[key]);
     if (Number.isFinite(number)) settings[key] = Math.min(field.max, Math.max(field.min, number));
@@ -143,6 +151,7 @@ export class StrumInput {
       refractoryMs: s.scratchRefractoryMs,
       peakWindowMs: s.scratchPeakWindowMs,
       touchSuppressMs: s.touchSuppressMs,
+      rejectScreenAxis: s.rejectScreenAxis,
     });
     this.#pushActive();
   }
@@ -183,7 +192,7 @@ export class StrumInput {
     if (event?.type !== 'hit' || this.settings.mode !== 'scratch') return;
     const s = this.settings;
     const strength = Number(event.strength);
-    const velocity = velocityFor(strength, s.scratchThreshold, s.scratchMax);
+    const velocity = velocityFor(strength, s.scratchSoft, s.scratchMax);
 
     let direction = 'down';
     let directionNote = 'fixed';
@@ -236,7 +245,14 @@ const GROUPS = [
   {
     title: 'Edge scratch',
     modes: ['scratch'],
-    fields: ['scratchThreshold', 'scratchMax', 'scratchRefractoryMs', 'scratchPeakWindowMs', 'touchSuppressMs'],
+    fields: [
+      'scratchThreshold',
+      'scratchSoft',
+      'scratchMax',
+      'scratchRefractoryMs',
+      'scratchPeakWindowMs',
+      'touchSuppressMs',
+    ],
   },
   { title: 'Strum', modes: ['force', 'scratch'], fields: ['spreadMs'] },
 ];
@@ -293,6 +309,7 @@ export function buildStrumSettings(container, input, { radioName }) {
     group.fields.forEach((key) => box.append(slider(key, input)));
     if (group.title === 'Edge scratch') {
       box.append(
+        checkbox('Ignore bumps from the screen side', 'rejectScreenAxis', input),
         checkbox('Detect up / down', 'detectDirection', input),
         checkbox('Flip up / down', 'flipDirection', input),
       );
